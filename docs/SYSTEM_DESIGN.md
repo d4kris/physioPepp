@@ -64,9 +64,8 @@ Exercises come from two sources merged into one library view:
 4. **No backup/transfer story** — no accounts means losing the phone means
    losing history. Worth a manual export (share a JSON/file) even without
    full sync.
-5. **Content updates without an account system** — fine at
-   bundle-with-app-release cadence; gets awkward if the clinic wants to
-   push new exercises frequently.
+5. **Content updates without an account system** — solved by the seed
+   strategy in §8.
 6. **Custom exercise images** — user-supplied photos need stable on-device
    storage, compression, and cleanup (see §6).
 
@@ -76,7 +75,8 @@ See `db/schema.sql` for the full SQLite DDL. Summary:
 
 - **`exercises`** — unified shape for bundled and custom exercises
   (`source` discriminates). Custom exercises reference an on-device image
-  file; bundled ones reference a bundle-relative asset key.
+  file; bundled ones reference a bundle-relative asset key. A `deprecated`
+  flag marks bundled exercises retired from the library (see §8).
 - **`routines`** — patient-assembled sequences of exercises.
 - **`routine_steps`** — join table between routines and exercises, carrying
   the per-routine `sets`/`reps`/`duration_sec`/`rest_sec`. This is
@@ -86,6 +86,9 @@ See `db/schema.sql` for the full SQLite DDL. Summary:
   timestamps, steps completed vs. total) to drive streaks/adherence. No
   per-set granularity — there's no clinician consuming this data, so
   detailed logging isn't needed yet. Additive later if required.
+- **`app_meta`** — single-row-per-key store for app-level metadata, used to
+  track the currently-applied bundled content version (see §8). Distinct
+  from schema migrations.
 
 Key constraint decisions:
 
@@ -163,10 +166,48 @@ screen locks mid-exercise.
   base64 bloats size ~33% and doesn't scale well once the exercise list
   renders more than a couple dozen custom entries with images.
 
-## 7. Open questions / next steps
+## 7. (reserved — see §6 for image handling, previously listed here)
 
-- Seed/migration strategy for reconciling bundled exercise updates into
-  existing installs across app versions.
+## 8. Seed & content-update strategy
+
+Bundled exercises ship as a versioned JSON asset
+(`bundled-exercises.json`: `{ contentVersion, exercises: [...] }`), where
+each exercise has a **stable id slug** (e.g. `"wall-sit"`) that must never
+be reused for a different exercise once shipped.
+
+Two version concepts are kept deliberately separate:
+
+- **`PRAGMA user_version`** — tracks *schema* migrations (new tables/
+  columns as the app's own data model evolves).
+- **`app_meta.bundled_content_version`** — tracks *content* seed version
+  (which version of the bundled exercise list has been applied).
+
+Bumping one doesn't require touching the other.
+
+**On app launch:**
+
+1. Compare `app_meta.bundled_content_version` to the bundled asset's
+   `contentVersion` constant. If equal, skip — no DB writes on the common
+   path.
+2. If the bundled version is newer, run a single transaction that:
+   - **Upserts** every exercise in the new bundle by id (`source =
+     'bundled'` rows only — custom rows are never touched). Un-deprecates
+     on upsert, in case a previously retired exercise is reintroduced.
+   - **Soft-deletes** any existing bundled row whose id is no longer in
+     the new bundle, by setting `deprecated = 1` — chosen over hard delete
+     so that patients with the retired exercise in an existing routine
+     don't hit the `ON DELETE RESTRICT` constraint or lose routine data.
+     Retired exercises drop out of library browse queries
+     (`WHERE deprecated = 0`) but remain directly resolvable by id, so old
+     routines keep working; the UI can optionally show a "retired" badge.
+   - Writes the new `contentVersion` into `app_meta`, in the same
+     transaction as the data changes, so a crash mid-seed can't leave the
+     version and data out of sync.
+
+See `db/seed.ts` for the pseudocode implementation.
+
+## 9. Open questions / next steps
+
 - "Add custom exercise" flow state machine (capture/pick → compress →
   save → appears in library).
 - Whether `session_logs` should survive routine deletion (see §4).

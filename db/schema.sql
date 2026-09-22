@@ -10,7 +10,8 @@ CREATE TABLE exercises (
   default_sets INTEGER,
   default_reps INTEGER,
   default_duration_sec INTEGER,
-  created_at TEXT                   -- custom only, NULL for bundled
+  created_at TEXT,                  -- custom only, NULL for bundled
+  deprecated INTEGER NOT NULL DEFAULT 0  -- bundled only: 1 = retired from library, still resolvable by id
 );
 
 CREATE TABLE routines (
@@ -40,6 +41,15 @@ CREATE TABLE session_logs (
   total_steps INTEGER NOT NULL
 );
 
+-- Single-row-per-key store for app-level metadata (e.g. bundled content version).
+-- Distinct from PRAGMA user_version, which tracks *schema* migrations, not
+-- *content* seed version — see docs/SYSTEM_DESIGN.md §8.
+CREATE TABLE app_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE INDEX idx_routine_steps_routine ON routine_steps(routine_id);
 CREATE INDEX idx_routine_steps_exercise ON routine_steps(exercise_id);
 CREATE INDEX idx_session_logs_routine ON session_logs(routine_id);
+CREATE INDEX idx_exercises_source_deprecated ON exercises(source, deprecated);
