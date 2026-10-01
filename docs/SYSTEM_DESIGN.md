@@ -206,9 +206,74 @@ Bumping one doesn't require touching the other.
 
 See `db/seed.ts` for the pseudocode implementation.
 
-## 9. Open questions / next steps
+## 9. Add-custom-exercise flow
 
-- "Add custom exercise" flow state machine (capture/pick → compress →
-  save → appears in library).
+Decisions: photo is **optional** (placeholder icon allowed, added later),
+and the form is **multi-step** — Details → Image → Confirm — rather than
+one screen, since compress/permission handling for the image step benefits
+from being isolated from field validation.
+
+### States
+
+```
+LIBRARY
+   │ tap "Add exercise"
+   ▼
+DETAILS ──(Cancel)──▶ LIBRARY (draft discarded)
+   │ Next (valid: name required; sets + one of reps/duration required)
+   ▼
+IMAGE ──(Skip)────────────────────────────▶ CONFIRM (no image)
+   │ Camera / Gallery
+   ▼
+PERMISSION_CHECK ──(denied)──▶ IMAGE (inline error + link to Settings)
+   │ granted
+   ▼
+CAPTURE_OR_PICK ──(user cancels)──▶ IMAGE (unchanged)
+   │ image selected
+   ▼
+COMPRESSING ──▶ IMAGE (shows preview; Retake/Change or Next)
+                   │ Next
+                   ▼
+                CONFIRM
+   │
+   ├─(Edit details)──▶ DETAILS  (draft preserved, incl. any image)
+   ├─(Edit image)────▶ IMAGE
+   └─(Save)
+        ▼
+     SAVING ──(failure)──▶ CONFIRM (error shown, retry)
+        │ success
+        ▼
+     SUCCESS ──▶ LIBRARY (new exercise visible, confirmation toast)
+```
+
+### Notes
+
+- **Draft is in-memory only**, not persisted to SQLite until Save. If the
+  app is killed mid-flow, the draft is lost — an acceptable v1 tradeoff
+  given this is a quick add-an-exercise form, not a long-form editor.
+  Revisit if backgrounding-during-flow turns out to be common in practice.
+- **Save ordering avoids orphaned files:** on Save, the (already-compressed)
+  image is moved from its temp/cache location into
+  `custom-exercise-images/{uuid}.jpg` *first*, then the `exercises` row is
+  inserted referencing that filename. If the DB insert fails, the copied
+  file is deleted as a compensating action — so a failed save never leaves
+  an orphaned image file, and a successful DB row never references a
+  missing file.
+- **Validation on Details:** name is required; at least one of
+  `defaultReps` / `defaultDurationSec` is required (mirrors the
+  `RoutineStep` constraint from §4 — an exercise needs a rep count or a
+  hold duration, not neither). `defaultSets` defaults to 1 if left blank.
+  `instructions` is optional — some patients may rely on the image alone.
+- **Permission denial** is handled inline in the IMAGE step rather than
+  blocking the whole flow — the patient can still Skip and save with a
+  placeholder, then add a photo later from the exercise's edit screen
+  (same IMAGE sub-flow, entered from a different jumping-off point).
+
+See `src/flows/addCustomExercise.ts` for the state/action pseudocode.
+
+## 10. Open questions / next steps
+
 - Whether `session_logs` should survive routine deletion (see §4).
 - Manual export format for history/routines, given no backend sync exists.
+- Edit-existing-custom-exercise flow (likely reuses the IMAGE/CONFIRM
+  sub-states from §9, entered from a different starting point).

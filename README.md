@@ -20,12 +20,16 @@ docs/
 db/
   schema.sql         — SQLite schema (exercises, routines, routine_steps, session_logs, app_meta)
   seed.ts            — pseudocode for the bundled-content seed/reconciliation strategy
+src/flows/
+  addCustomExercise.ts — state machine pseudocode for the add-custom-exercise flow
 ```
 
 See `docs/SYSTEM_DESIGN.md` for the full design writeup, including the two
 approaches considered for session timer/cue reliability (the riskiest piece)
-and the reasoning behind the schema, storage, and seed strategy decisions.
+and the reasoning behind the schema, storage, seed strategy, and
+add-custom-exercise flow decisions.
 
 ## Status
 
-Design phase — architecture, schema, and seed strategy defined, not yet implemented.
+Design phase — architecture, schema, seed strategy, and add-custom-exercise
+flow defined, not yet implemented.
