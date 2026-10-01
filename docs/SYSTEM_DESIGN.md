@@ -83,9 +83,11 @@ See `db/schema.sql` for the full SQLite DDL. Summary:
   intentional: the exercise defines *what*, the step defines *how much* for
   that routine (seeded from the exercise's defaults but overridable).
 - **`session_logs`** — thin log of routine runs (started/completed
-  timestamps, steps completed vs. total) to drive streaks/adherence. No
-  per-set granularity — there's no clinician consuming this data, so
-  detailed logging isn't needed yet. Additive later if required.
+  timestamps, steps completed vs. total) to drive streaks/adherence. Keeps
+  a `routine_name_snapshot` and a nullable `routine_id` so history
+  survives routine deletion (see constraint notes below). No per-set
+  granularity — there's no clinician consuming this data, so detailed
+  logging isn't needed yet. Additive later if required.
 - **`app_meta`** — single-row-per-key store for app-level metadata, used to
   track the currently-applied bundled content version (see §8). Distinct
   from schema migrations.
@@ -100,11 +102,16 @@ Key constraint decisions:
   forcing the app to handle it explicitly (warn the user, or offer to
   remove it from those routines first) rather than silently orphaning
   references.
-- `ON DELETE CASCADE` on `routine_steps.routine_id` and
-  `session_logs.routine_id` — deleting a routine cleans up its steps and
-  history. **Open question:** if session history should survive routine
-  deletion (e.g. an all-time history view), drop the cascade on
-  `session_logs.routine_id` and make it nullable instead.
+- `ON DELETE CASCADE` on `routine_steps.routine_id` — deleting a routine
+  cleans up its steps, since steps are meaningless without the routine.
+- `ON DELETE SET NULL` on `session_logs.routine_id`, **not** cascade —
+  session history (and the streaks/adherence stats derived from it) must
+  survive routine deletion, since patients editing or recreating routines
+  is expected PT-plan churn and shouldn't cost them their history. A
+  `routine_name_snapshot` column, captured at session start, keeps old log
+  entries readable (e.g. "Shoulder mobility — Sep 12") even after the
+  source routine is gone or renamed — all-time stats are computed purely
+  from `session_logs` and never need to join back to `routines`.
 
 ## 5. Riskiest piece: timer/cue reliability during a session
 
@@ -273,7 +280,6 @@ See `src/flows/addCustomExercise.ts` for the state/action pseudocode.
 
 ## 10. Open questions / next steps
 
-- Whether `session_logs` should survive routine deletion (see §4).
 - Manual export format for history/routines, given no backend sync exists.
 - Edit-existing-custom-exercise flow (likely reuses the IMAGE/CONFIRM
   sub-states from §9, entered from a different starting point).

@@ -34,7 +34,8 @@ CREATE TABLE routine_steps (
 
 CREATE TABLE session_logs (
   id TEXT PRIMARY KEY,
-  routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+  routine_id TEXT REFERENCES routines(id) ON DELETE SET NULL,  -- nullable: survives routine deletion
+  routine_name_snapshot TEXT NOT NULL,  -- captured at session start; stays meaningful if routine is renamed/deleted
   started_at TEXT NOT NULL,
   completed_at TEXT,
   steps_completed INTEGER NOT NULL DEFAULT 0,
