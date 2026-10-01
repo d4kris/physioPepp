@@ -22,6 +22,7 @@ db/
   seed.ts            — pseudocode for the bundled-content seed/reconciliation strategy
 src/flows/
   addCustomExercise.ts — state machine pseudocode for the add-custom-exercise flow
+  exportSummary.ts     — pseudocode for the routine export-to-PDF flow
 ```
 
 See `docs/SYSTEM_DESIGN.md` for the full design writeup, including the two

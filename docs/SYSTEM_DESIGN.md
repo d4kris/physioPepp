@@ -62,8 +62,10 @@ Exercises come from two sources merged into one library view:
 3. **Rep counting without sensors** — reps are patient-tapped or shown as a
    target, not camera-tracked.
 4. **No backup/transfer story** — no accounts means losing the phone means
-   losing history. Worth a manual export (share a JSON/file) even without
-   full sync.
+   losing history. Out of scope by design: the export feature (§10) is a
+   human-readable share artifact for a clinician, not a backup/restore
+   mechanism, so this remains an accepted limitation rather than a solved
+   problem.
 5. **Content updates without an account system** — solved by the seed
    strategy in §8.
 6. **Custom exercise images** — user-supplied photos need stable on-device
@@ -278,8 +280,36 @@ COMPRESSING ──▶ IMAGE (shows preview; Retake/Change or Next)
 
 See `src/flows/addCustomExercise.ts` for the state/action pseudocode.
 
-## 10. Open questions / next steps
+## 10. Export / share summary
 
-- Manual export format for history/routines, given no backend sync exists.
+**Purpose:** a human-readable, printable summary a patient can hand to a
+PT or doctor — not a backup/restore mechanism. This simplified the
+problem considerably versus a round-trippable export format.
+
+**Scope:** per-routine, not whole-library. Includes:
+- Routine name and exercise list (name, sets/reps/duration, a short
+  instructions excerpt).
+- A recent-activity section pulled from `session_logs` for that
+  `routine_id` — adherence over the last N days and current streak.
+  (Only meaningful for routines that still exist — this is a live-routine
+  action, not something offered from a deleted/historical entry.)
+
+**Approach comparison:**
+
+| | HTML → PDF (`expo-print` + `expo-sharing`) | Plain text (`Share.share`) |
+|---|---|---|
+| Pros | Polished, printable, one-page artifact; native share sheet (email/print/AirDrop) | Trivial, zero new deps |
+| Cons | HTML/CSS hand-rolled and cross-device tested; images need base64 inlining, print WebView doesn't reliably resolve `file://` | No images, no real layout — weak artifact for a clinician to skim or print |
+
+**Decision:** HTML → PDF via `expo-print` + `expo-sharing`, scoped to
+text + a simple table. Exercise image thumbnails are a stretch
+enhancement, not day-one scope — the complexity (base64 inlining) is high
+relative to the value for an artifact a clinician mostly reads rather
+than looks at.
+
+See `src/flows/exportSummary.ts` for the pseudocode.
+
+## 11. Open questions / next steps
+
 - Edit-existing-custom-exercise flow (likely reuses the IMAGE/CONFIRM
   sub-states from §9, entered from a different starting point).
